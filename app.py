@@ -1,10 +1,11 @@
 import os
 
-from flask import Flask, render_template, request, flash, redirect, session, g
+from flask import Flask, render_template, request, flash, redirect, session, g, url_for
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+
+from forms import UserAddForm, LoginForm, MessageForm, ProfileForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -18,10 +19,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
-app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
+app.app_context().push()
 connect_db(app)
 
 
@@ -113,7 +115,9 @@ def login():
 def logout():
     """Handle logout of user."""
 
-    # IMPLEMENT THIS
+    session.pop(CURR_USER_KEY)
+    flash("You are now logged out.", "info")
+    return redirect('/')
 
 
 ##############################################################################
@@ -210,8 +214,39 @@ def stop_following(follow_id):
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
+    print('*********************')
+    print(g.user.id)
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    user_info = User.query.get(g.user.id)
+    form = ProfileForm(obj=user_info)
+    
+    if form.validate_on_submit():
+        user = User.authenticate(form.username.data,
+            form.password.data)
+        
+        if user:
+            
+            user.username = form.username.data
+            user.email = form.email.data
+            user.password = form.password.data
+            user.image_url = form.image_url.data
+            user.header_image_url = form.header_image_url.data
+            user.bio = form.bio.data
+            db.session.commit()
+            flash(f"Saved!", "success")
+            return redirect(url_for("users_show", user_id = g.user.id))
+            
 
-    # IMPLEMENT THIS
+        else:
+            flash("Invalid credentials.", 'danger')
+            return redirect("/users/profile")
+    
+    else: 
+        return render_template("/users/edit.html", form = form)
+    
 
 
 @app.route('/users/delete', methods=["POST"])
