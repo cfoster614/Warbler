@@ -354,12 +354,17 @@ def homepage():
     """
 
     if g.user:
-        
+        # messages = (Message
+        #             .query
+        #             .order_by(Message.timestamp.desc())
+        #             .limit(100)
+        #             .all())
         user = User.query.get(g.user.id)
         following = user.following
         likes = db.session.query(Likes).filter_by(user_id = g.user.id)
 
         return render_template('home.html', likes=likes, following = following)
+        
 
     else:
         return render_template('home-anon.html')
