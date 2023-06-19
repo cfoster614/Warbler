@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 
 from forms import UserAddForm, LoginForm, MessageForm, ProfileForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -264,6 +264,33 @@ def delete_user():
 
     return redirect("/signup")
 
+@app.route('/users/add_like/<int:msg_id>', methods=["POST", "GET"])
+def add_like(msg_id):
+    """Add a like to a post."""
+    if not g.user:
+        flash("Login to be able to like posts!", "danger")
+        return redirect("/")
+    
+    message = Message.query.get(msg_id)
+    user_id = g.user.id
+    
+    if message is None or message.user_id == user_id:
+        flash("Can't like your own post.", "danger")
+        return redirect("/")
+    
+    existing_like = db.session.query(Likes).filter_by(user_id = user_id, message_id = msg_id).first()
+   
+    if existing_like:
+            db.session.delete(existing_like)
+            db.session.commit()
+    else:
+        new_like = Likes(user_id = user_id, message_id = msg_id)
+        db.session.add(new_like)
+        db.session.commit()
+        
+    return redirect("/")
+            
+        
 
 ##############################################################################
 # Messages routes:
@@ -332,8 +359,9 @@ def homepage():
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
+        likes = db.session.query(Likes).filter_by(user_id = g.user.id)
 
-        return render_template('home.html', messages=messages)
+        return render_template('home.html', messages=messages, likes=likes)
 
     else:
         return render_template('home-anon.html')
