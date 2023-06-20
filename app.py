@@ -214,8 +214,6 @@ def stop_following(follow_id):
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
-    print('*********************')
-    print(g.user.id)
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")

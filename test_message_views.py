@@ -7,7 +7,7 @@
 
 import os
 from unittest import TestCase
-
+from flask import session
 from models import db, connect_db, Message, User
 
 # BEFORE we import our app, let's set an environmental variable
@@ -48,7 +48,15 @@ class MessageViewTestCase(TestCase):
                                     email="test@test.com",
                                     password="testuser",
                                     image_url=None)
-
+        self.extra_user = User.signup(username = "extra",
+                                      email="extra.com",
+                                      password="test",
+                                      image_url=None)
+        db.session.commit()
+        self.testpost = Message(text="Testing",
+                                timestamp=Message.timestamp.default.arg,
+                                user_id=self.extra_user.id)
+        db.session.add(self.testpost)
         db.session.commit()
 
     def test_add_message(self):
@@ -69,7 +77,7 @@ class MessageViewTestCase(TestCase):
             # Make sure it redirects
             self.assertEqual(resp.status_code, 302)
 
-            msg = Message.query.one()
+            msg = Message.query.filter_by(text="Hello").one()
             self.assertEqual(msg.text, "Hello")
             
             get_resp = c.get("/messages/new")
@@ -78,16 +86,43 @@ class MessageViewTestCase(TestCase):
             #Should render message form
             self.assertEqual(get_resp.status_code, 200)
             self.assertIn('<button class="btn btn-outline-success btn-block">Add my message!</button>', html)
-    def test_show_messages(self):
+            
+            delete = c.post(f"/messages/{msg.id}/delete")
+            self.assertEqual(delete.status_code, 302)
+            
+            
+    def test_messages(self):
         """Is user able to click into a message?"""
         with self.client as c:
             with c.session_transaction() as sess:
                 sess[CURR_USER_KEY] = self.testuser.id
             
-            resp = c.post("/messages/new", data={"text": "Hello"})
-            msg = Message.query.one()
+            msg = Message.query.filter_by(user_id = self.extra_user.id).first()
             get_resp = c.get(f"/messages/{msg.id}")
+            html = get_resp.get_data(as_text=True)
             self.assertEqual(get_resp.status_code, 200)
+            #Message from another user should not show the delete button
+            self.assertNotIn('<button class="btn btn-outline-danger">Delete</button>', html)
             
-         
+            #User should not be able to delete a message not made by them
+            delete = c.post(f"/messages/{msg.id}/delete")
+            self.assertEqual(delete.status_code, 302)
+            
+            
+            
+    def test_auth_for_messages(self):
+        #If user not logged in, shouldn't be able to create a new message
+        resp = self.client.get(f"/messages/new")
+        #Check redirect to homepage
+        self.assertEqual(resp.status_code, 302)
+        
+        #If not logged in, shouldn't be able to delete a message
+        resp = self.client.get(f"/messages")
+        
+        #Shouldn't be able to add a new message
+        resp = self.client.get("/")
+        html = resp.get_data(as_text=True)
+        self.assertNotIn('<li><a href="/messages/new">New Message</a></li>', html)
+        
+            
             
